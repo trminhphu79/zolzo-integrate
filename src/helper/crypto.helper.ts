@@ -77,3 +77,79 @@ export function rsaSha256VerifyBase64(
   verifier.end();
   return verifier.verify(pubPem, Buffer.from(signatureB64, 'base64'));
 }
+
+function normalizePublicKey(input: string): {
+  key: string | Buffer;
+  isPem: boolean;
+} {
+  if (!input) throw new Error('Zoloz public key missing');
+
+  const trimmed = input.trim();
+
+  // Case A: raw PEM pasted in env (maybe with \n)
+  if (
+    trimmed.includes('BEGIN PUBLIC KEY') ||
+    trimmed.includes('BEGIN RSA PUBLIC KEY') ||
+    trimmed.includes('BEGIN CERTIFICATE')
+  ) {
+    // convert "\n" (escaped) to real newlines
+    const pem = trimmed.replace(/\\n/g, '\n');
+    return { key: pem, isPem: true };
+  }
+
+  // Try base64-decode (could be base64 of PEM or base64 of DER)
+  let decoded: string;
+  try {
+    decoded = Buffer.from(trimmed, 'base64').toString('utf8');
+  } catch {
+    throw new Error('Zoloz public key is not valid base64/PEM');
+  }
+
+  // Case B: base64 of PEM text
+  if (
+    decoded.includes('BEGIN PUBLIC KEY') ||
+    decoded.includes('BEGIN RSA PUBLIC KEY') ||
+    decoded.includes('BEGIN CERTIFICATE')
+  ) {
+    return { key: decoded, isPem: true };
+  }
+
+  // Case C: base64 of **DER** SubjectPublicKeyInfo (SPKI) or PKCS#1
+  // Return Buffer; we’ll load it as DER later.
+  const der = Buffer.from(trimmed, 'base64');
+  return { key: der, isPem: false };
+}
+
+export function rsaOaepEncryptBase64V2(
+  publicKeyEnvValue: string,
+  data: Buffer,
+): string {
+  const { key, isPem } = normalizePublicKey(publicKeyEnvValue);
+
+  // Build a KeyObject that Node can use
+  let keyObject: crypto.KeyObject;
+  try {
+    if (isPem) {
+      keyObject = crypto.createPublicKey(key as string);
+    } else {
+      // Treat as DER SubjectPublicKeyInfo (SPKI). If your key is PKCS#1 DER, change type to 'pkcs1'.
+      keyObject = crypto.createPublicKey({
+        key: key as Buffer,
+        format: 'der',
+        type: 'spki',
+      });
+    }
+  } catch (e) {
+    throw new Error(`Failed to parse public key: ${(e as Error).message}`);
+  }
+
+  const out = crypto.publicEncrypt(
+    {
+      key: keyObject,
+      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256',
+    },
+    data,
+  );
+  return out.toString('base64');
+}
