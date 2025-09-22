@@ -41,28 +41,6 @@ export function rsaOaepDecrypt(
   );
 }
 
-export function rsaSha256SignBase64(
-  privateKeyPemB64: string,
-  content: string,
-): string {
-  const privPem = Buffer.from(privateKeyPemB64, 'base64').toString('utf8');
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(content);
-  signer.end();
-  return signer.sign(privPem).toString('base64');
-}
-
-export function rsaSha256VerifyBase64(
-  publicKeyPemB64: string,
-  content: string,
-  signatureB64: string,
-): boolean {
-  const pubPem = Buffer.from(publicKeyPemB64, 'base64').toString('utf8');
-  const verifier = crypto.createVerify('RSA-SHA256');
-  verifier.update(content);
-  verifier.end();
-  return verifier.verify(pubPem, Buffer.from(signatureB64, 'base64'));
-}
 
 export function normalizePublicKey(input: string): {
   key: string | Buffer;
@@ -138,4 +116,69 @@ export function rsaOaepEncryptBase64(
     data,
   );
   return out.toString('base64');
+}
+
+
+/** Normalize PRIVATE key (PEM / base64-PEM / base64-DER PKCS#8 or PKCS#1) */
+function normalizePrivateKey(input: string): { key: string | Buffer; kind: 'pem' | 'der-pkcs8' | 'der-pkcs1' } {
+  if (!input) throw new Error('private key missing');
+  const trimmed = input.trim();
+
+  // PEM pasted (maybe with \n escapes)
+  if (
+    trimmed.includes('BEGIN PRIVATE KEY') ||           // PKCS#8 PEM
+    trimmed.includes('BEGIN RSA PRIVATE KEY') ||       // PKCS#1 PEM
+    trimmed.includes('BEGIN ENCRYPTED PRIVATE KEY')    // PKCS#8 encrypted (not supported here)
+  ) {
+    return { key: trimmed.replace(/\\n/g, '\n'), kind: 'pem' };
+  }
+
+  // base64 -> utf8 → PEM?
+  const decodedUtf8 = Buffer.from(trimmed, 'base64').toString('utf8');
+  if (
+    decodedUtf8.includes('BEGIN PRIVATE KEY') ||
+    decodedUtf8.includes('BEGIN RSA PRIVATE KEY') ||
+    decodedUtf8.includes('BEGIN ENCRYPTED PRIVATE KEY')
+  ) {
+    return { key: decodedUtf8, kind: 'pem' };
+  }
+
+  // Otherwise treat original as base64 DER; try PKCS#8 first, then PKCS#1
+  return { key: Buffer.from(trimmed, 'base64'), kind: 'der-pkcs8' };
+}
+
+export function rsaSha256SignBase64(privateKeyAny: string, content: string): string {
+  const norm = normalizePrivateKey(privateKeyAny);
+
+  let keyObject: crypto.KeyObject | undefined;
+
+  if (norm.kind === 'pem') {
+    keyObject = crypto.createPrivateKey(norm.key as string);
+  } else {
+    // DER — try PKCS#8 first
+    try {
+      keyObject = crypto.createPrivateKey({ key: norm.key as Buffer, format: 'der', type: 'pkcs8' });
+    } catch {
+      // Then try PKCS#1
+      keyObject = crypto.createPrivateKey({ key: norm.key as Buffer, format: 'der', type: 'pkcs1' });
+    }
+  }
+
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(content);
+  signer.end();
+  return signer.sign(keyObject!).toString('base64');
+}
+
+/** Mirror verification to accept PEM/base64-PEM/base64-DER for public key. */
+export function rsaSha256VerifyBase64(publicKeyAny: string, content: string, signatureB64: string): boolean {
+  const { key, isPem } = normalizePublicKey(publicKeyAny);
+  const keyObject = isPem
+    ? crypto.createPublicKey(key as string)
+    : crypto.createPublicKey({ key: key as Buffer, type: 'spki', format: 'der' });
+
+  const verifier = crypto.createVerify('RSA-SHA256');
+  verifier.update(content);
+  verifier.end();
+  return verifier.verify(keyObject, Buffer.from(signatureB64, 'base64'));
 }

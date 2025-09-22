@@ -99,35 +99,47 @@ describe('rsaOaepEncryptBase64', () => {
     expect(() => rsaOaepEncryptBase64('not-a-valid-key', message)).toThrow();
   });
 
-  describe('RSA-SHA256 sign/verify (PKCS#1 v1.5)', () => {
-    it('signs and verifies true for the same message', () => {
-      const content =
-        'POST /api/v1.zoloz.realid.initialize\nclientId.reqTime.body';
-      const sigB64 = rsaSha256SignBase64(privPemB64, content);
-      const ok = rsaSha256VerifyBase64(pubPemB64, content, sigB64);
-      expect(ok).toBe(true);
-    });
-
-    it('verify returns false for altered content', () => {
-      const content = 'abc';
-      const sigB64 = rsaSha256SignBase64(privPemB64, content);
-      const tampered = 'abcd';
-      const ok = rsaSha256VerifyBase64(pubPemB64, tampered, sigB64);
-      expect(ok).toBe(false);
-    });
-
-    it('verify returns false for wrong public key', () => {
-      const { publicKey: otherPub } = crypto.generateKeyPairSync('rsa', {
+  describe('rsaSha256SignBase64 (robust key formats)', () => {
+    const { publicKey: pubPem, privateKey: privPem } =
+      crypto.generateKeyPairSync('rsa', {
         modulusLength: 2048,
         publicKeyEncoding: { type: 'spki', format: 'pem' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, // PKCS#8
       });
-      const otherPubB64 = Buffer.from(otherPub, 'utf8').toString('base64');
 
-      const content = 'xyz';
-      const sigB64 = rsaSha256SignBase64(privPemB64, content);
-      const ok = rsaSha256VerifyBase64(otherPubB64, content, sigB64);
-      expect(ok).toBe(false);
+    const pubPemB64 = Buffer.from(pubPem, 'utf8').toString('base64');
+    const privPemB64 = Buffer.from(privPem, 'utf8').toString('base64');
+    const msg = 'sign-me';
+
+    const verify = (pubAny: string, content: string, sigB64: string) =>
+      rsaSha256VerifyBase64(pubAny, content, sigB64);
+
+    it('signs with PEM (\\n escaped) and verifies with PEM', () => {
+      const pemEscaped = privPem.replace(/\n/g, '\\n'); // simulate .env
+      const sig = rsaSha256SignBase64(pemEscaped, msg);
+      expect(verify(pubPem, msg, sig)).toBe(true);
+    });
+
+    it('signs with base64-PEM and verifies with base64-PEM', () => {
+      const sig = rsaSha256SignBase64(privPemB64, msg);
+      expect(verify(pubPemB64, msg, sig)).toBe(true);
+    });
+
+    it('signs with base64-DER PKCS#8 and verifies with base64-DER SPKI', () => {
+      const derPrivPkcs8 = crypto
+        .createPrivateKey(privPem)
+        .export({ format: 'der', type: 'pkcs8' }) as Buffer;
+      const derPubSpki = crypto
+        .createPublicKey(pubPem)
+        .export({ format: 'der', type: 'spki' }) as Buffer;
+
+      const sig = rsaSha256SignBase64(derPrivPkcs8.toString('base64'), msg);
+      expect(verify(derPubSpki.toString('base64'), msg, sig)).toBe(true);
+    });
+
+    it('verify fails on content tamper', () => {
+      const sig = rsaSha256SignBase64(privPemB64, msg);
+      expect(verify(pubPem, msg + 'x', sig)).toBe(false);
     });
   });
 });
