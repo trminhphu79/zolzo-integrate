@@ -25,21 +25,6 @@ export function aesDecryptBase64(aesKey: Buffer, payload: string): string {
   return dec.toString('utf8');
 }
 
-export function rsaOaepEncryptBase64(
-  publicKeyPemB64: string,
-  data: Buffer,
-): string {
-  const pubPem = Buffer.from(publicKeyPemB64, 'base64').toString('utf8');
-  const out = crypto.publicEncrypt(
-    {
-      key: pubPem,
-      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-      oaepHash: 'sha256',
-    },
-    data,
-  );
-  return out.toString('base64');
-}
 export function rsaOaepDecrypt(
   privateKeyPemB64: string,
   base64Data: string,
@@ -66,6 +51,7 @@ export function rsaSha256SignBase64(
   signer.end();
   return signer.sign(privPem).toString('base64');
 }
+
 export function rsaSha256VerifyBase64(
   publicKeyPemB64: string,
   content: string,
@@ -78,7 +64,7 @@ export function rsaSha256VerifyBase64(
   return verifier.verify(pubPem, Buffer.from(signatureB64, 'base64'));
 }
 
-function normalizePublicKey(input: string): {
+export function normalizePublicKey(input: string): {
   key: string | Buffer;
   isPem: boolean;
 } {
@@ -120,7 +106,7 @@ function normalizePublicKey(input: string): {
   return { key: der, isPem: false };
 }
 
-export function rsaOaepEncryptBase64V2(
+export function rsaOaepEncryptBase64(
   publicKeyEnvValue: string,
   data: Buffer,
 ): string {
