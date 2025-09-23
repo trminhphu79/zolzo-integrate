@@ -61,6 +61,40 @@ export class ZolozCallerService {
 
   constructor(private proto: TwoWayAuthProtocolService) {}
 
+  async callAmlAnalyze(bizContent: object) {
+    const apiName = 'v1.aml.analyze';
+    const context: OpenApiContext = {
+      apiName,
+      requestHeaders: {},
+      responseHeaders: {},
+      requestBody: '',
+      responseBody: '',
+    };
+
+    // Step 1: Build signed/encrypted request
+    await this.proto.buildRequest(context, JSON.stringify(bizContent));
+
+    // Step 2: Construct full URL
+    const url = `${process.env.ZOLOZ_HOST}/api/${apiName.replace(/\./g, '/')}`;
+
+    // Step 3: Send with axios
+    const resp = await axios.post(url, context.requestBody, {
+      headers: context.requestHeaders,
+      responseType: 'text',
+      timeout: 15000,
+      validateStatus: () => true,
+    });
+
+    // Step 4: Update context
+    context.responseHeaders = normalizeHeaders(resp.headers);
+    context.responseBody =
+      typeof resp.data === 'string' ? resp.data : JSON.stringify(resp.data);
+
+    // Step 5: Parse signed/encrypted response
+    const businessJson = await this.proto.parseResponse(context);
+    return JSON.parse(businessJson);
+  }
+
   async callInitialize(bizContent: object) {
     return this.call('v1.zoloz.realid.initialize', bizContent);
   }

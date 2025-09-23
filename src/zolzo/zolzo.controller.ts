@@ -9,6 +9,22 @@ import { CheckResultRequestDto, CheckResultResponseDto } from './result.dto';
 export class RealIdController {
   constructor(private readonly zoloz: ZolozCallerService) {}
 
+  @Post('test-zolzo')
+  @ApiOperation({ summary: 'Test zolzo api' })
+  @ApiResponse({ status: 200 })
+  async callAmlAnalyze() {
+    return await this.zoloz.callAmlAnalyze({
+      bizCode: 'TEST',
+      extendData: {
+        certName: 'test',
+        gender: 'male',
+        nationality: 'u',
+      },
+      tenantID: 'TEST',
+      tntInstID: 'GLOBAL',
+    });
+  }
+
   @Post('h5initialize')
   @ApiOperation({ summary: 'Initialize RealId H5 flow (ZOLOZ)' })
   @ApiBody({ type: H5InitializeDto })
