@@ -201,10 +201,10 @@ export class ProductConfigDto {
 }
 
 export class H5ModeConfigDto {
-  @ApiProperty({ example: 'http://xxx.html' })
+  @ApiProperty({ example: 'https://testing.com' })
   @IsUrl()
   completeCallbackUrl!: string;
-  @ApiProperty({ example: 'http://xxx.html' })
+  @ApiProperty({ example: 'https://testing.com' })
   @IsUrl()
   interruptCallbackUrl!: string;
 
@@ -213,17 +213,17 @@ export class H5ModeConfigDto {
   @IsIn(['Y', 'N'])
   allowDegradation?: 'Y' | 'N';
 
-  @ApiPropertyOptional({ example: 'http://xxx.html' })
+  @ApiPropertyOptional({ example: 'https://testing.com' })
   @IsOptional()
   @IsUrl()
   docFrontPageGuideUrl?: string;
 
-  @ApiPropertyOptional({ example: 'http://xxx.html' })
+  @ApiPropertyOptional({ example: 'https://testing.com' })
   @IsOptional()
   @IsUrl()
   docBackPageGuideUrl?: string;
 
-  @ApiPropertyOptional({ example: 'http://xxx.html' })
+  @ApiPropertyOptional({ example: 'https://testing.com' })
   @IsOptional()
   @IsUrl()
   facePageGuideUrl?: string;

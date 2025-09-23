@@ -1,6 +1,3 @@
-export function urlEncode(v: string) {
-  return encodeURIComponent(v);
-}
 export function urlDecode(v: string) {
   return decodeURIComponent(v);
 }

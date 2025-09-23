@@ -12,7 +12,6 @@ import {
   parseComposedHeaderValue,
   toHeaderMap,
   urlDecode,
-  urlEncode,
 } from 'src/helper/http.helper';
 import { formatReqTime } from 'src/helper/time.helper';
 
@@ -37,7 +36,7 @@ export class TwoWayAuthProtocolService {
     private readonly aesLength: 128 | 192 | 256 = 256,
   ) {}
 
-  private buildSignContentForRequest(
+  buildSignContentForRequest(
     apiName: string,
     clientId: string,
     reqTime: string,
@@ -65,7 +64,7 @@ export class TwoWayAuthProtocolService {
 
     if (this.encrypt) {
       headers['Content-Type'] = 'text/plain; charset=UTF-8';
-      const aesKey = aesGenerateKey(this.aesLength);
+      const aesKey = aesGenerateKey(256); // ensure 256-bit
       const encryptedBody = aesEncryptBase64(aesKey, rawReq);
       reqBody = encryptedBody;
 
@@ -73,27 +72,32 @@ export class TwoWayAuthProtocolService {
         this.openApiPublicKeyB64,
         aesKey,
       );
-      const encryptHeaderVal = `algorithm=RSA_AES, symmetricKey=${urlEncode(wrappedKeyB64)}`;
-      headers['Encrypt'] = encryptHeaderVal;
+      headers['Encrypt'] =
+        `algorithm=RSA_AES, symmetricKey=${encodeURIComponent(wrappedKeyB64)}`;
     } else {
       headers['Content-Type'] = 'application/json; charset=UTF-8';
     }
 
-    const reqTime = formatReqTime(new Date());
+    const reqTime = formatReqTime(new Date()); // e.g. ...+0800
+    context.requestBody = reqBody; // freeze the final body
+
+    const toSign = this.buildSignContentForRequest(
+      context.apiName,
+      this.clientId,
+      reqTime,
+      context.requestBody,
+    );
+
+    this.logger.debug(
+      `TO_SIGN(len=${toSign.length}): ${JSON.stringify(toSign)}`,
+    );
     const signatureB64 = rsaSha256SignBase64(
       this.merchantPrivateKeyB64,
-      this.buildSignContentForRequest(
-        context.apiName,
-        this.clientId,
-        reqTime,
-        reqBody,
-      ),
+      toSign,
     );
     headers['Signature'] =
-      `algorithm=RSA256, signature=${urlEncode(signatureB64)}`;
+      `algorithm=RSA256, signature=${encodeURIComponent(signatureB64)}`;
     headers['Request-Time'] = reqTime;
-
-    context.requestBody = reqBody;
   }
 
   async parseResponse(context: OpenApiContext): Promise<string> {

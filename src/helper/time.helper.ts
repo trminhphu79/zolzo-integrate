@@ -1,14 +1,17 @@
-export function formatReqTime(date = new Date()) {
-  const pad = (n: number, l = 2) => String(n).padStart(l, '0');
-  const yyyy = date.getFullYear();
-  const MM = pad(date.getMonth() + 1);
-  const dd = pad(date.getDate());
-  const HH = pad(date.getHours());
-  const mm = pad(date.getMinutes());
-  const ss = pad(date.getSeconds());
-  const tz = -date.getTimezoneOffset();
-  const sign = tz >= 0 ? '+' : '-';
-  const hh = pad(Math.floor(Math.abs(tz) / 60));
-  const mins = pad(Math.abs(tz) % 60);
-  return `${yyyy}-${MM}-${dd}T${HH}:${mm}:${ss}${sign}${hh}${mins}`;
+function pad(n: number) { return n < 10 ? `0${n}` : `${n}`; }
+
+// 2025-09-23T16:00:00+0800  (note: +0800 without colon)
+export function formatReqTime(d = new Date()): string {
+  const yyyy = d.getFullYear();
+  const MM = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const HH = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  const ss = pad(d.getSeconds());
+  const tzMin = -d.getTimezoneOffset(); // minutes east of UTC
+  const sign = tzMin >= 0 ? '+' : '-';
+  const abs = Math.abs(tzMin);
+  const tzh = pad(Math.floor(abs / 60));
+  const tzm = pad(abs % 60);
+  return `${yyyy}-${MM}-${dd}T${HH}:${mm}:${ss}${sign}${tzh}${tzm}`;
 }
