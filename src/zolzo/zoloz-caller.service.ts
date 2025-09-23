@@ -3,7 +3,43 @@ import {
   TwoWayAuthProtocolService,
   OpenApiContext,
 } from './two-way-auth.protocol';
+
 import axios from 'axios';
+
+function axiosToCurl(config: any): string {
+  const method = (config.method || 'get').toUpperCase();
+  const url = config.url;
+  const headers = config.headers || {};
+  const data =
+    typeof config.data === 'string'
+      ? config.data
+      : JSON.stringify(config.data || {});
+
+  let curl = [`curl -X ${method}`];
+
+  // Add headers
+  for (const [key, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      value.forEach((v) => curl.push(`-H "${key}: ${v}"`));
+    } else if (value !== undefined) {
+      curl.push(`-H "${key}: ${value}"`);
+    }
+  }
+
+  // Add body if exists
+  if (data && method !== 'GET') {
+    curl.push(`--data '${data}'`);
+  }
+
+  curl.push(`"${url}"`);
+
+  return curl.join(' ');
+}
+
+axios.interceptors.request.use((config) => {
+  console.log('[Axios → cURL]', axiosToCurl(config));
+  return config;
+});
 
 function isAxiosError(err: any) {
   return (
