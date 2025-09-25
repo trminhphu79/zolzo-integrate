@@ -13,7 +13,6 @@ export function aesEncryptBase64(
     cipher.update(Buffer.from(plaintextUtf8, 'utf8')),
     cipher.final(),
   ]);
-  // store iv + ciphertext (both base64) as iv:ciphertext
   return `${iv.toString('base64')}:${enc.toString('base64')}`;
 }
 export function aesDecryptBase64(aesKey: Buffer, payload: string): string {
@@ -50,18 +49,15 @@ export function normalizePublicKey(input: string): {
 
   const trimmed = input.trim();
 
-  // Case A: raw PEM pasted in env (maybe with \n)
   if (
     trimmed.includes('BEGIN PUBLIC KEY') ||
     trimmed.includes('BEGIN RSA PUBLIC KEY') ||
     trimmed.includes('BEGIN CERTIFICATE')
   ) {
-    // convert "\n" (escaped) to real newlines
     const pem = trimmed.replace(/\\n/g, '\n');
     return { key: pem, isPem: true };
   }
 
-  // Try base64-decode (could be base64 of PEM or base64 of DER)
   let decoded: string;
   try {
     decoded = Buffer.from(trimmed, 'base64').toString('utf8');
@@ -69,7 +65,6 @@ export function normalizePublicKey(input: string): {
     throw new Error('Zoloz public key is not valid base64/PEM');
   }
 
-  // Case B: base64 of PEM text
   if (
     decoded.includes('BEGIN PUBLIC KEY') ||
     decoded.includes('BEGIN RSA PUBLIC KEY') ||
@@ -78,8 +73,6 @@ export function normalizePublicKey(input: string): {
     return { key: decoded, isPem: true };
   }
 
-  // Case C: base64 of **DER** SubjectPublicKeyInfo (SPKI) or PKCS#1
-  // Return Buffer; we’ll load it as DER later.
   const der = Buffer.from(trimmed, 'base64');
   return { key: der, isPem: false };
 }
@@ -90,7 +83,7 @@ export function rsaOaepEncryptBase64(
 ): string {
   const { key, isPem } = normalizePublicKey(publicKeyEnvValue);
 
-  // Build a KeyObject that Node can use
+  // Build a KeyObject that Nodejs can use
   let keyObject: crypto.KeyObject;
   try {
     if (isPem) {
@@ -119,12 +112,10 @@ export function rsaOaepEncryptBase64(
 }
 
 
-/** Normalize PRIVATE key (PEM / base64-PEM / base64-DER PKCS#8 or PKCS#1) */
 function normalizePrivateKey(input: string): { key: string | Buffer; kind: 'pem' | 'der-pkcs8' | 'der-pkcs1' } {
   if (!input) throw new Error('private key missing');
   const trimmed = input.trim();
 
-  // PEM pasted (maybe with \n escapes)
   if (
     trimmed.includes('BEGIN PRIVATE KEY') ||           // PKCS#8 PEM
     trimmed.includes('BEGIN RSA PRIVATE KEY') ||       // PKCS#1 PEM
@@ -133,7 +124,6 @@ function normalizePrivateKey(input: string): { key: string | Buffer; kind: 'pem'
     return { key: trimmed.replace(/\\n/g, '\n'), kind: 'pem' };
   }
 
-  // base64 -> utf8 → PEM?
   const decodedUtf8 = Buffer.from(trimmed, 'base64').toString('utf8');
   if (
     decodedUtf8.includes('BEGIN PRIVATE KEY') ||
@@ -143,7 +133,6 @@ function normalizePrivateKey(input: string): { key: string | Buffer; kind: 'pem'
     return { key: decodedUtf8, kind: 'pem' };
   }
 
-  // Otherwise treat original as base64 DER; try PKCS#8 first, then PKCS#1
   return { key: Buffer.from(trimmed, 'base64'), kind: 'der-pkcs8' };
 }
 
@@ -155,11 +144,9 @@ export function rsaSha256SignBase64(privateKeyAny: string, content: string): str
   if (norm.kind === 'pem') {
     keyObject = crypto.createPrivateKey(norm.key as string);
   } else {
-    // DER — try PKCS#8 first
     try {
       keyObject = crypto.createPrivateKey({ key: norm.key as Buffer, format: 'der', type: 'pkcs8' });
     } catch {
-      // Then try PKCS#1
       keyObject = crypto.createPrivateKey({ key: norm.key as Buffer, format: 'der', type: 'pkcs1' });
     }
   }
@@ -170,7 +157,6 @@ export function rsaSha256SignBase64(privateKeyAny: string, content: string): str
   return signer.sign(keyObject!).toString('base64');
 }
 
-/** Mirror verification to accept PEM/base64-PEM/base64-DER for public key. */
 export function rsaSha256VerifyBase64(publicKeyAny: string, content: string, signatureB64: string): boolean {
   const { key, isPem } = normalizePublicKey(publicKeyAny);
   const keyObject = isPem

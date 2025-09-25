@@ -1,6 +1,5 @@
 function pad(n: number) { return n < 10 ? `0${n}` : `${n}`; }
 
-// 2025-09-23T16:00:00+0800  (note: +0800 without colon)
 export function formatReqTime(d = new Date()): string {
   const yyyy = d.getFullYear();
   const MM = pad(d.getMonth() + 1);
@@ -8,7 +7,7 @@ export function formatReqTime(d = new Date()): string {
   const HH = pad(d.getHours());
   const mm = pad(d.getMinutes());
   const ss = pad(d.getSeconds());
-  const tzMin = -d.getTimezoneOffset(); // minutes east of UTC
+  const tzMin = -d.getTimezoneOffset(); 
   const sign = tzMin >= 0 ? '+' : '-';
   const abs = Math.abs(tzMin);
   const tzh = pad(Math.floor(abs / 60));
