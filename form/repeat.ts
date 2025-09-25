@@ -1,27 +1,58 @@
-// repeat-section.type.ts
 import { Component } from '@angular/core';
 import { FieldArrayType } from '@ngx-formly/core';
 
 @Component({
-  selector: 'formly-repeat-section',
-  template: `
-    <div *ngFor="let f of field.fieldGroup; let i = index" class="mb-3">
-      <formly-field [field]="f"></formly-field>
-      <div class="mt-1 flex gap-2">
-        <button type="button" (click)="remove(i)">Remove</button>
-        <button type="button" (click)="move(i, -1)" [disabled]="i===0">↑</button>
-        <button type="button" (click)="move(i, +1)" [disabled]="i===field.fieldGroup.length-1">↓</button>
-      </div>
-    </div>
-    <button type="button" (click)="add()">+ Add</button>
-  `,
+selector: 'formly-repeat-section',
+template: `
+<div class="mb-3">
+<legend *ngIf="props.label">{{ props.label }}</legend>
+<p *ngIf="props.description">{{ props.description }}</p>
+
+<div *ngFor="let field of field.fieldGroup; let i = index" class="row align-items-baseline">
+<formly-field class="col" [field]="field"></formly-field>
+<div class="col-1 d-flex align-items-center">
+<button class="btn btn-danger" type="button" (click)="remove(i)">-</button>
+</div>
+</div>
+<div style="margin:30px 0;">
+<button class="btn btn-primary" type="button" (click)="add()">{{ props.addText }}</button>
+</div>
+</div>
+`,
 })
-export class RepeatSectionTypeComponent extends FieldArrayType {
-  move(i: number, dir: 1 | -1) {
-    const arr = this.field.model as any[];
-    const j = i + dir;
-    if (j < 0 || j >= arr.length) return;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    this.modelChange.emit(this.field.model);
-  }
-}
+export class RepeatTypeComponent extends FieldArrayType {}
+
+
+form = new FormGroup({});
+  model: any = {
+    tasks: [null],
+  };
+  options: FormlyFormOptions = {};
+
+  fields: FormlyFieldConfig[] = [
+    {
+      key: 'tasks',
+      type: 'repeat',
+      props: {
+        addText: 'Add Task',
+        label: 'TODO LIST',
+      },
+      fieldArray: {
+        type: 'input',
+        props: {
+          placeholder: 'Task name',
+          required: true,
+        },
+      },
+    },
+  ];
+
+  <form [formGroup]="form" (ngSubmit)="submit()">
+  <formly-form [model]="model" [fields]="fields" [options]="options" [form]="form"></formly-form>
+  <button type="submit" class="btn btn-primary submit-button" [disabled]="!form.valid">Submit</button>
+</form>
+
+   FormlyModule.forRoot({
+      types: [{ name: 'repeat', component: RepeatTypeComponent }],
+      validationMessages: [{ name: 'required', message: 'This field is required' }],
+    }),
