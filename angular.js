@@ -1,50 +1,13 @@
-// my-form.component.ts
-import { Component, DestroyRef, inject } from '@angular/core';
-import { FormGroup } from '@angular/forms';
-import { FormlyFieldConfig } from '@ngx-formly/core';
-import { TranslocoService } from '@jsverse/transloco';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component } from '@angular/core';
+import { FieldWrapper } from '@ngx-formly/core';
 
 @Component({
-  selector: 'app-my-form',
+  selector: 'formly-wrapper-transloco-label',
   template: `
-    <form [formGroup]="form">
-      <formly-form [form]="form" [fields]="fields" [model]="model"></formly-form>
-    </form>
+    <label *ngIf="to.labelKey" [attr.for]="id">
+      {{ to.labelKey | transloco : to.labelParams }}
+    </label>
+    <ng-container #fieldComponent></ng-container>
   `,
 })
-export class MyFormComponent {
-  private readonly t = inject(TranslocoService);
-  private readonly destroyRef = inject(DestroyRef);
-
-  form = new FormGroup({});
-  model: any = {};
-
-  fields: FormlyFieldConfig[] = [
-    {
-      key: 'email',
-      type: 'input',
-      templateOptions: {
-        labelKey: 'form.email',               // <- store key
-        placeholderKey: 'form.emailHint',
-        required: true,
-      },
-      hooks: {
-        onInit: (field) => {
-          const stop = takeUntilDestroyed(this.destroyRef);
-          const to = field.templateOptions!;
-
-          this.t.selectTranslate(to.labelKey!)
-            .pipe(stop)
-            .subscribe(txt => to.label = txt);
-
-          if (to.placeholderKey) {
-            this.t.selectTranslate(to.placeholderKey)
-              .pipe(stop)
-              .subscribe(txt => to.placeholder = txt);
-          }
-        },
-      },
-    },
-  ];
-}
+export class TranslocoLabelWrapper extends FieldWrapper {}
