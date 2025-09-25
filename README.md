@@ -1,98 +1,102 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+📌 Overview
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+The integration follows ZOLOZ Two-Way Authentication Protocol.
+Every API call is:
+• ✍️ Signed with your merchant private key
+• 🔒 Optionally encrypted with AES (key wrapped by RSA-OAEP)
+• ✅ Verified with ZOLOZ public key
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+This ensures:
+• Integrity → request/response cannot be tampered
+• Authenticity → response comes from ZOLOZ
+• Confidentiality → sensitive PII is encrypted
 
-## Description
+⸻
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+🔄 End-to-End Request Lifecycle
 
-## Project setup
+1. Build request body (bizContent)
+   • Construct the JSON payload according to ZOLOZ API spec (e.g. bizId, h5ModeConfig).
+   • This payload is the business content to send to ZOLOZ.
 
-```bash
-$ npm install
-```
+⸻
 
-## Compile and run the project
+2. Apply encryption (optional)
 
-```bash
-# development
-$ npm run start
+If encryption is enabled:
+• Generate random AES-256 key
+• Encrypt the bizContent JSON with AES-CBC
+• Encrypt AES key with ZOLOZ public key using RSA-OAEP
+• Add Encrypt header:
+Encrypt: algorithm=RSA_AES, symmetricKey=<RSA-OAEP encrypted AES key>
+	•	Set Content-Type: text/plain (encrypted payload)
 
-# watch mode
-$ npm run start:dev
+If encryption is disabled:
+	•	Use plain JSON body
+	•	Set Content-Type: application/json
 
-# production mode
-$ npm run start:prod
-```
+3. Sign request
+	•	Build string-to-sign:
+  POST /api/{apiName}
+  {clientId}.{requestTime}.{requestBody}
+	•	Sign with merchant private key (RSA-SHA256)
+	•	Add Signature header:
+  Signature: algorithm=RSA256, signature=<base64>
+  Also add:
+	•	Client-Id: <your_client_id>
+	•	Request-Time: <formatted timestamp>
 
-## Run tests
+4. Send to ZOLOZ endpoint
 
-```bash
-# unit tests
-$ npm run test
+Example for initialize:
+POST {ZOLOZ_HOST}/api/v1/zoloz/realid/initialize
+	•	Send signed + (optionally) encrypted body
+	•	Attach headers (Client-Id, Signature, Request-Time, Encrypt)
 
-# e2e tests
-$ npm run test:e2e
+⸻
 
-# test coverage
-$ npm run test:cov
-```
+5. Receive response
+On response:
+	•	Verify signature
+	•	Extract Signature + Response-Time headers
+	•	Build string-to-verify:
+  POST /api/{apiName}
+  {clientId}.{responseTime}.{responseBody}
+	•	Verify with ZOLOZ public key
+	•	Decrypt if needed
+	•	If Encrypt header present:
+	•	RSA-OAEP decrypt symmetric key using your merchant private key
+	•	AES decrypt the response body
 
-## Deployment
+⸻
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+6. Return parsed JSON
+	•	After verifying + decrypting → return clean JSON
+	•	Forward to controller → frontend
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+Example: Initialize Flow
+	1.	Backend calls callInitialize(bizContent)
+	2.	TwoWayAuthProtocolService.buildRequest()
+	•	Encrypts body (if enabled)
+	•	Signs request
+	•	Sets headers
+	3.	Axios sends request → ZOLOZ API
+	4.	TwoWayAuthProtocolService.parseResponse()
+    •	Verifies ZOLOZ signature
+    •	Decrypts body if encrypted
+	5.	Backend returns plain JSON:
+  {
+  "transactionId": "2025092500012345678",
+  "clientCfg": {
+    "h5Url": "https://zoloz.com/realid/h5?txn=2025092500012345678",
+    "locale": "en_US"
+  }
+}
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+ Key Headers
+	•	Client-Id → your ZOLOZ Client ID
+	•	Signature → signed request string (RSA-SHA256)
+	•	Request-Time → timestamp (strict format)
+	•	Encrypt → included only if encryption is enabled
+	•	Response-Time → from ZOLOZ, used for response signature validation
